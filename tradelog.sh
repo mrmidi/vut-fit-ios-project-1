@@ -1,3 +1,5 @@
+POSIXLY_CORRECT=yes
+
 if [ $# -eq 0 ]
   then
     echo
