@@ -74,7 +74,7 @@ printgraph()
                   }
                   else
                   {
-                    tick = int(max / width);
+                    tick = (max / width);
                     total = (bought - sold);
                     sum = int(total * lastprice);
                     total = int( sum / tick );
@@ -109,17 +109,55 @@ getmax()
     max=$(printpos | sort -t ":" -k2 -g -r | head -1 | awk -F ":" '{gsub(/^[ \t]+/, "", $2); print $2}')
 }
 
+#service function
+printhistnum()
+{
+  for t in "${tickers[@]}"
+    #catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {total = bought - sold; sum = total * lastprice; printf "%s \t : %.2f\n", t, sum; }'
+  do
+    catfiles | grep ";$t" | awk -F ';' -v t="$t" 'END {printf "%s;%d\n", t, NR}'
+  done
+}
+
+#service function
+getmaxhist()
+{
+  max=$( printhistnum | sort -t ";" -k2 -r -g | head -1 | awk -F ';' '{print $2}' )
+}
+
 printhist()
 {
-  getmax
+  getmaxhist
+  #max=$(printpos | sort -t ":" -k2 -g -r | head -1 | awk -F ":" '{gsub(/^[ \t]+/, "", $2); print $2}')t $
   for t in "${tickers[@]}"
     do
-      catfiles | grep ";$t" | awk -F ';' -v t="$t" 'END {
-              printf "%s\t: ", t;
-              for (i = 1; i <= NR; i++) {
-                printf "%s", "#";
-              }
-              printf "\n"
+      catfiles | grep ";$t" | awk -F ';' -v t="$t" -v max="$max" -v width="$WIDTH" 'END {
+              if (width == 0)
+                  {
+                    printf "%s\t: ", t;
+                    for (i = 1; i <= NR; i++)
+                      {
+                        printf "%s", "#";
+                      }
+                    printf "\n"
+                  }
+              else
+                {
+                    tick = (max / width);
+                    total = NR;
+                    total = int( total / tick );
+                    graph = "";
+                    if (total > 0)
+                      {
+                          ch = "#";
+                          for (i = 1; i <= total; i++)
+                            {
+                                graph = graph "" ch;
+                            }
+                      }
+                    else graph = "";
+                    printf "%s \t : %s\n", t, graph;
+                }
               }'
     done
 }
@@ -128,7 +166,7 @@ printlastprice()
 {
   for t in "${tickers[@]}"
     do
-      eval "$catcmd" | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} END {printf "%s \t : %.2f\n", t, lastprice; }'
+      catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} END {printf "%s \t : %.2f\n", t, lastprice; }'
     done
 }
 
