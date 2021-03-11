@@ -1,20 +1,39 @@
-#!/usr/bin/env bash
+if [ $# -eq 0 ]
+  then
+    echo
+    echo "Usage:"
+    echo "tradelog [-h|--help] [FILTR] [PŘÍKAZ] [LOG [LOG2 [...]]"
+    echo
+    exit 0
+fi
 
 # H E L P
 Help()
 {
-  echo "Trade Log Analyzer Semester Project"
-  echo "by mrmidi, 2021"
+  echo
   echo "Usage:"
   echo "tradelog [-h|--help] [FILTR] [PŘÍKAZ] [LOG [LOG2 [...]]"
-  echo "Try tradelog list-tick stock-2.log"
   echo
+  echo "PŘÍKAZ může být jeden z:"
+  printf "\tlist-tick – výpis seznamu vyskytujících se burzovních symbolů, tzv. “tickerů”.\n"
+  printf "\tprofit – výpis celkového zisku z uzavřených pozic.\n"
+  printf "\tpos – výpis hodnot aktuálně držených pozic seřazených sestupně dle hodnoty.\n"
+  printf "\tlast-price – výpis poslední známé ceny pro každý ticker.\n"
+  printf "\thist-ord – výpis histogramu počtu transakcí dle tickeru.\n"
+  printf "\tgraph-pos – výpis grafu hodnot držených pozic dle tickeru.\n"
+  echo "FILTR může být kombinace následujících:"
+  printf "\t-a DATETIME – after: jsou uvažovány pouze záznamy PO tomto datu (bez tohoto data). DATETIME je formátu YYYY-MM-DD HH:MM:SS.\n"
+  printf "\t-b DATETIME – before: jsou uvažovány pouze záznamy PŘED tímto datem (bez tohoto data).\n"
+  printf "\t-t TICKER – jsou uvažovány pouze záznamy odpovídající danému tickeru. Při více výskytech přepínače se bere množina všech uvedených tickerů.\n"
+  printf "\t-w WIDTH – u výpisu grafů nastavuje jejich šířku, tedy délku nejdelšího řádku na WIDTH\n"
+  echo "-h a --help vypíšou nápovědu s krátkým popisem každého příkazu a přepínače."
+  echo
+  exit 0
 }
 
 #create array with tickers
 gettickers()
 {
-
   tickers=( $(catfiles | awk -F ';' '{print $2}' | sort -u) )
 }
 
@@ -32,58 +51,69 @@ filter()
 eval "$filter"
 }
 
-#REMOVE
-ListTick()
-{
-  #sort -k 2 -u -t';' -s "$file"
-  #awk -F ';' '{print $2}' "$file"  | sort -u
-  echo "==="
-  echo ${POSITIONAL[*]}
-  echo "==="
-  awk -F ';' '{print $2}' "${POSITIONAL[*]}"  | sort -u
-}
 
 printpos()
 {
   for t in "${tickers[@]}"
     do
-      #echo "$t"
-      #awk -F ';' 'NR==1 {lastprice=$4}' {print f,$1}' < if on first line - save last price
-      # what's going on here: 1) iterate through tickers array. 1) sort strings by date descending. get last price from first line {print "'$t'\t : \t" /NR}
       catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {total = bought - sold; sum = total * lastprice; printf "%s \t : %.2f\n", t, sum; }'
     done
 }
 
-printpos()
+printgraph()
 {
+  getmax
   for t in "${tickers[@]}"
     do
-      #echo "$t"
-      #awk -F ';' 'NR==1 {lastprice=$4}' {print f,$1}' < if on first line - save last price
-      # what's going on here: 1) iterate through tickers array. 1) sort strings by date descending. get last price from first line {print "'$t'\t : \t" /NR}
-      catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {
-                total = bought - sold;
-                total = int( total / 1000 );
+      catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" -v max="$max" -v width="$WIDTH" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {
+                if (width == 0)
+                  {
+                    total = (bought - sold);
+                    sum = total * lastprice;
+                    total = int(total / 1000);
+                  }
+                  else
+                  {
+                    tick = int(max / width);
+                    total = (bought - sold);
+                    sum = int(total * lastprice);
+                    total = int( sum / tick );
+                  }
+                graph = "";
                 if (total > 0)
                   {
+                  ch = "#";
+                  for (i = 1; i <= total; i++)
+                    {
+                       graph = graph "" ch;
+                    }
                   }
                 else if(total < 0)
                   {
+                    ch = "!";
+                    for (i = -1; i >= total; i--)
+                    {
+                      graph = graph "" ch;
+                    }
                   }
                 else
                   graph = "";
-                sum = total * lastprice;
-                printf "%s \t : %.2f\n", t, sum; }'
+
+                printf "%s \t : %s\n", t, graph;
+                }'
     done
+}
+
+getmax()
+{
+    max=$(printpos | sort -t ":" -k2 -g -r | head -1 | awk -F ":" '{gsub(/^[ \t]+/, "", $2); print $2}')
 }
 
 printhist()
 {
-for t in "${tickers[@]}"
+  getmax
+  for t in "${tickers[@]}"
     do
-      #echo "$t"
-      #awk -F ';' 'NR==1 {lastprice=$4}' {print f,$1}' < if on first line - save last price
-      # what's going on here: 1) iterate through tickers array. 1) sort strings by date descending. get last price from first line {print "'$t'\t : \t" /NR}
       catfiles | grep ";$t" | awk -F ';' -v t="$t" 'END {
               printf "%s\t: ", t;
               for (i = 1; i <= NR; i++) {
@@ -98,31 +128,15 @@ printlastprice()
 {
   for t in "${tickers[@]}"
     do
-      #echo "$t"
-      #awk -F ';' 'NR==1 {lastprice=$4}' {print f,$1}' < if on first line - save last price
-      # what's going on here: 1) iterate through tickers array. 1) sort strings by date descending. get last price from first line {print "'$t'\t : \t" /NR}
       eval "$catcmd" | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} END {printf "%s \t : %.2f\n", t, lastprice; }'
     done
 }
-
-
-
-
-
-
-# test if arguments is empty
-# exit if true
-#if [ -z $* ]
-#then
-#  echo "Usage: tradelog [-h|--help] [FILTR] [PŘÍKAZ] [LOG [LOG2 [...]]"
-#  exit 1
-#fi
 
 commands=0
 TICKER=''
 BEFORE=''
 AFTER=''
-WIDTH=''
+WIDTH='0'
 FILES=()
 tickers=()
 
@@ -135,7 +149,7 @@ while [ ! -z "$1" ]; do
          shift
          regex='^[0-9]+$'
          if ! [[ $1 =~ $regex ]] ; then
-            echo "Error: WIDTH parameter should be positive integer" >&2; exit 1
+            echo "Error: WIDTH parameter should be a positive integer" >&2; exit 1
          fi
          WIDTH=$1
          ;;
@@ -163,7 +177,6 @@ while [ ! -z "$1" ]; do
         TICKER+=";$1;"
          ;;
      list-tick)
-        #shift
         commands+=1
         LISTTICK=YES
         ;;
@@ -208,43 +221,46 @@ while [ ! -z "$1" ]; do
 shift
 done
 
-if [ $commands -gt 1 ]
-   then
-     >&2 echo "Error: too many commands! You can use only one per time."
-     exit 1
-fi
+
 
 set -- "${FILES[@]}"
 
 
-#iterrate all files in arguments. check if it's archived. prompt filename if it's empty
-#TODO prompt if empty filename
+#check if filename is empty
+if [ ${#FILES[@]} -eq 0 ]; then
+    read -r -p "Please enter filename: " file
+     FILES+=("$file")
+fi
 
+#check if it's file in current directory
 for f in "${FILES[@]}"
 do
-  if file --mime-type "$f" | grep -q gzip$; then #check if it gzipped
+  if [ ! -f "$f" ]
+    then
+     >&2 echo "Error reading file!"
+     exit 1
+  fi
+done
+
+#check if it's archived and prepare commands for processing
+for f in "${FILES[@]}"
+do
+  if file --mime-type "$f" | grep -q gzip$
+   then
     # cat test.txt.gz | zcat > for OS X compatibility
     catcmd+="cat "$f" | zcat;"
   else
     catcmd+="cat $f;"
   fi
-#  echo "$f"
 done
 
-#echo "$TICKER"
-#echo "$catcmd"
-#stream=eval "$catcmd"
-#echo "$stream"
-#echo "$files"
-#echo "$command"
-#eval "$command"
-# awk -F ';' -v d1="2021-07-29 15:51:18" -v d2="2021-07-29 16:33:26" '$1 > d1 && $1 < d2' stock-2.log
-
+#show all ticks in alphabetical order
 if [ $LISTTICK ]; then
     eval "$catcmd" | awk -F ';' '{print $2}' | sort -u
     exit 0
 fi
 
+#read filters and prepare commands
 if [ $FILTER ]
   then
     #echo "filtered"
@@ -274,15 +290,29 @@ if [ $FILTER ]
     fi
 fi
 
-#echo $filter
 
+#check if commands > 1
+if [ $commands -gt 1 ]
+   then
+     >&2 echo "Error: too many commands! You can use only one per time."
+     exit 1
+fi
 
+#if no commands just read logs
+if [ $commands == 0 ]
+  then
+    catfiles
+    exit 0
+fi
+
+#count total profit
 if [ $SHOWPROFIT ]
   then
   catfiles | awk -F ';' '{if  ($3 == "buy") bought += $4 * $6; else sold += $4 * $6} END {total = sold - bought; OFMT="%0.02f"; print total}'
   exit 0
 fi
 
+#show positions
 if [ $POS ]
   then
     gettickers
@@ -290,7 +320,7 @@ if [ $POS ]
     exit 0
 fi
 
-
+#show histogram
 if [ $HIST ]
   then
     gettickers
@@ -298,6 +328,7 @@ if [ $HIST ]
     exit 0
 fi
 
+#show last know prices
 if [ $LASTPRICE ]
   then
     gettickers
@@ -305,18 +336,10 @@ if [ $LASTPRICE ]
     exit 0
 fi
 
+#graph
 if [ $GRAPHPOS ]
   then
     gettickers
-    printgraph
+    printgraph | sort -t ":" -k1
     exit 0
 fi
-
-#echo
-#echo "TEST"
-#tst="cat fucklog | awk -F ';' '{print \$2}'"
-#eval "$tst"
-#eval "$catcmd" | eval "$filter"
-#catfiles | filter
-
-#catfiles
