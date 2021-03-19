@@ -39,6 +39,7 @@ gettickers()
   tickers=( $(catfiles | awk -F ';' '{print $2}' | sort -u) )
 }
 
+
 catfiles(){
   if [ $FILTER ]
     then
@@ -54,12 +55,42 @@ eval "$filter"
 }
 
 
+getlength()
+{
+  getmax
+  #echo "$max"
+  #echo "$min"
+  maxlen=${#max}
+  minlen=${#min}
+  if [ $maxlen -ge $minlen ]
+  then
+    len=$maxlen
+  else
+    len=$minlen
+  fi
+}
+
 printpos()
 {
   for t in "${tickers[@]}"
     do
-      catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {total = bought - sold; sum = total * lastprice; printf "%s \t : %.2f\n", t, sum; }'
+      catfiles | grep ";$t;" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" -v len="$len" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {total = bought - sold; sum = total * lastprice; printf "%-10s: %'$len'.2f\n", t, sum; }'
+      #catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {total = bought - sold; sum = total * lastprice; printf "%s \t : %.2f\n", t, sum; }'
+      #catfiles | grep ";$t" | sort -t ';' -k1 -r
     done
+}
+
+graphpos()
+{
+  getmax
+  #echo $min
+  #echo $max
+  for t in "${tickers[@]}"
+    do
+
+      catfiles | grep ";$t" | sort -t ';' -k1 -r
+    done
+
 }
 
 printgraph()
@@ -67,35 +98,46 @@ printgraph()
   getmax
   for t in "${tickers[@]}"
     do
-      catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" -v max="$max" -v width="$WIDTH" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {
+      catfiles | grep ";$t;" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" -v max="$max" -v min="$min" -v width="$WIDTH" 'NR==1 {lastprice=$4} {if  ($3 == "buy") bought += $6; else sold += $6} END {
                 if (width == 0)
                   {
                     total = (bought - sold);
                     sum = total * lastprice;
-                    total = int(total / 1000);
+                    total = (total / 1000);
                   }
                   else
                   {
+                    max = (max < (min * -1) ? min : max)
                     tick = (max / width);
                     total = (bought - sold);
-                    sum = int(total * lastprice);
-                    total = int( sum / tick );
+                    sum = (total * lastprice);
+                    total = ( sum / tick );
+                    maxw = width;
+                    total = (total < 0 ? -total : total)
+                    tmp = (total == int(total) ? total : int(total) + 1);
                   }
                 graph = "";
+
+
+                if (tmp == maxw)
+                  {
+                    tmp = total+1;
+                  }
+
+                if (sum > 0)
+                  {
+                    ch = "#"
+                  }
+                else if (sum < 0)
+                  {
+                    ch = "!"
+                  }
+
                 if (total > 0)
                   {
-                  ch = "#";
                   for (i = 1; i <= total; i++)
                     {
                        graph = graph "" ch;
-                    }
-                  }
-                else if(total < 0)
-                  {
-                    ch = "!";
-                    for (i = -1; i >= total; i--)
-                    {
-                      graph = graph "" ch;
                     }
                   }
                 else
@@ -109,6 +151,18 @@ printgraph()
 getmax()
 {
     max=$(printpos | sort -t ":" -k2 -g -r | head -1 | awk -F ":" '{gsub(/^[ \t]+/, "", $2); print $2}')
+    min=$(printpos | sort -t ":" -k2 -g | head -1 | awk -F ":" '{gsub(/^[ \t]+/, "", $2); print $2}')
+}
+
+getmin()
+{
+    min=$(printpos | sort -t ":" -k2 -g | head -1 | awk -F ":" '{gsub(/^[ \t]+/, "", $2); print $2}')
+}
+
+getlastpricelen()
+{
+    len=0
+    len=$(printlastprice | sort -t ":" -k2 -g -r | head -1 | awk -F ":" '{printf length($2) - 1 }')
 }
 
 #service function
@@ -129,7 +183,6 @@ getmaxhist()
 
 printhist()
 {
-  getmaxhist
   #max=$(printpos | sort -t ":" -k2 -g -r | head -1 | awk -F ":" '{gsub(/^[ \t]+/, "", $2); print $2}')t $
   for t in "${tickers[@]}"
     do
@@ -147,7 +200,7 @@ printhist()
                 {
                     tick = (max / width);
                     total = NR;
-                    total = int( total / tick );
+                    total = ( total / tick );
                     graph = "";
                     if (total > 0)
                       {
@@ -168,7 +221,7 @@ printlastprice()
 {
   for t in "${tickers[@]}"
     do
-      catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4} END {printf "%s \t : %.2f\n", t, lastprice; }'
+      catfiles | grep ";$t" | sort -t ';' -k1 -r | awk -F ';' -v t="$t" 'NR==1 {lastprice=$4;} END {printf "%s \t : %'$len'.2f\n", t, lastprice; }'
     done
 }
 
@@ -179,6 +232,7 @@ AFTER=''
 WIDTH='0'
 FILES=()
 tickers=()
+len=11
 
 while [ ! -z "$1" ]; do
   case "$1" in
@@ -356,6 +410,7 @@ fi
 if [ $POS ]
   then
     gettickers
+    getlength
     printpos | sort -t ":" -k2 -g -r
     exit 0
 fi
@@ -372,6 +427,8 @@ fi
 if [ $LASTPRICE ]
   then
     gettickers
+    getlastpricelen
+    #echo $len
     printlastprice
     exit 0
 fi
@@ -381,5 +438,6 @@ if [ $GRAPHPOS ]
   then
     gettickers
     printgraph | sort -t ":" -k1
+    #graphpos
     exit 0
 fi
