@@ -121,7 +121,8 @@ printgraph()
 
                 if (tmp == maxw)
                   {
-                    tmp = total+1;
+                    printf("catch");
+                    total = total + 1
                   }
 
                 if (sum > 0)
